@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Church Bible Tracker</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+body { font-family: 'Inter', sans-serif; background: #f9fafb; }
+header { background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); color:white; padding:1rem; display:flex; justify-content:space-between; align-items:center; }
+button { cursor:pointer; transition:0.2s; }
+button:hover { transform: scale(1.05); }
+.panel { transition: all 0.3s; }
+.hidden { display:none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="text-xl font-bold">Church Bible Tracker</div>
+  <button id="adminToggle">Admin Panel 🔑</button>
+</header>
+
+<div class="container mx-auto p-4 max-w-3xl space-y-6">
+
+  <!-- Motivational message -->
+  <div id="motivation" class="bg-yellow-50 p-4 rounded-lg hidden">
+    <p id="motivationText" class="text-yellow-800 font-medium"></p>
+  </div>
+
+  <!-- Book & Chapter Selector -->
+  <div class="bg-white p-4 rounded-lg shadow-md">
+    <h3 class="font-bold mb-2">Current Book & Chapter</h3>
+    <select id="bookSelect" class="border p-2 rounded w-full mb-2"></select>
+    <select id="chapterSelect" class="border p-2 rounded w-full"></select>
+  </div>
+
+  <!-- Student Submission Form -->
+  <div class="bg-white p-4 rounded-lg shadow-md">
+    <h3 class="font-bold mb-2">Submit Reflection</h3>
+    <input id="studentName" placeholder="Your Name" class="border p-2 rounded w-full mb-2">
+    <textarea id="reflectionText" placeholder="Write your reflection..." class="border p-2 rounded w-full mb-2"></textarea>
+    <button id="submitBtn" class="bg-indigo-600 text-white p-2 rounded w-full">Submit</button>
+    <p id="submitMsg" class="text-green-600 mt-2 hidden">Submitted successfully!</p>
+  </div>
+
+  <!-- Admin Panel -->
+  <div id="adminPanel" class="fixed top-0 right-0 w-80 h-full bg-white shadow-lg p-4 panel hidden overflow-y-auto">
+    <!-- CLOSE TOGGLE -->
+    <button id="adminCloseBtn" class="bg-red-500 text-white px-2 py-1 rounded float-right mb-2">Close ✖</button>
+
+    <h3 class="font-bold mb-2">Admin Panel</h3>
+
+    <!-- Add Book -->
+    <div class="border p-2 rounded mb-4">
+      <h4 class="font-bold">Add Book + Chapters</h4>
+      <input type="text" id="newBook" placeholder="Book name" class="border p-1 rounded w-full mb-1">
+      <input type="number" id="newChapters" placeholder="Number of chapters" class="border p-1 rounded w-full mb-1">
+      <button id="addBookBtn" class="bg-green-600 text-white p-1 rounded w-full">Add Book</button>
+    </div>
+
+    <!-- Motivational message -->
+    <div class="border p-2 rounded mb-4">
+      <h4 class="font-bold">Add Motivation</h4>
+      <textarea id="newMotivation" placeholder="Write motivational message..." class="border p-1 rounded w-full mb-1"></textarea>
+      <button id="addMotivationBtn" class="bg-yellow-600 text-white p-1 rounded w-full">Add Message</button>
+    </div>
+
+    <!-- View Submissions -->
+    <div class="border p-2 rounded">
+      <h4 class="font-bold">Submissions</h4>
+      <div id="submissionList" class="max-h-64 overflow-y-auto"></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+// API URL (Google Apps Script Web App URL)
+const API_URL = "YOUR_GOOGLE_WEBAPP_URL"; // Replace with your Web App URL
+
+// --- Admin panel toggle ---
+const adminToggle = document.getElementById("adminToggle");
+const adminPanel = document.getElementById("adminPanel");
+const adminCloseBtn = document.getElementById("adminCloseBtn");
+adminToggle.addEventListener("click", () => adminPanel.classList.toggle("hidden"));
+adminCloseBtn.addEventListener("click", () => adminPanel.classList.add("hidden"));
+
+// --- Books & Chapters ---
+let books = [];
+const bookSelect = document.getElementById("bookSelect");
+const chapterSelect = document.getElementById("chapterSelect");
+
+document.getElementById("addBookBtn").addEventListener("click", () => {
+  const bookName = document.getElementById("newBook").value.trim();
+  const chapters = parseInt(document.getElementById("newChapters").value);
+  if(bookName && chapters>0){
+    books.push({name: bookName, chapters});
+    updateBookSelect();
+    document.getElementById("newBook").value="";
+    document.getElementById("newChapters").value="";
+  }
+});
+
+function updateBookSelect(){
+  bookSelect.innerHTML = "";
+  books.forEach((b,i)=>{
+    const opt = document.createElement("option");
+    opt.value=i;
+    opt.textContent=b.name;
+    bookSelect.appendChild(opt);
+  });
+  updateChapterSelect();
+}
+
+bookSelect.addEventListener("change", updateChapterSelect);
+
+function updateChapterSelect(){
+  const selected = books[bookSelect.value];
+  chapterSelect.innerHTML="";
+  if(selected){
+    for(let i=1;i<=selected.chapters;i++){
+      const opt = document.createElement("option");
+      opt.value=i;
+      opt.textContent="Chapter "+i;
+      chapterSelect.appendChild(opt);
+    }
+  }
+}
+
+// --- Motivational message ---
+const motivationDiv = document.getElementById("motivation");
+const motivationText = document.getElementById("motivationText");
+document.getElementById("addMotivationBtn").addEventListener("click", () => {
+  const msg = document.getElementById("newMotivation").value.trim();
+  if(msg){
+    motivationText.textContent = msg;
+    motivationDiv.classList.remove("hidden");
+    document.getElementById("newMotivation").value="";
+  }
+});
+
+// --- Student submission ---
+document.getElementById("submitBtn").addEventListener("click", async () => {
+  const name = document.getElementById("studentName").value.trim();
+  const reflection = document.getElementById("reflectionText").value.trim();
+  const book = books[bookSelect.value]?.name;
+  const chapter = chapterSelect.value;
+  if(!name || !reflection || !book || !chapter){ alert("Fill all fields"); return; }
+
+  const payload = {name, book, chapter, reflection};
+  try {
+    await fetch(API_URL, {method:"POST", body:JSON.stringify(payload)});
+    document.getElementById("submitMsg").classList.remove("hidden");
+    setTimeout(()=>{document.getElementById("submitMsg").classList.add("hidden");},2000);
+    document.getElementById("studentName").value="";
+    document.getElementById("reflectionText").value="";
+    loadSubmissions(); // update submissions if admin panel is open
+  } catch(e){ alert("Error submitting: "+e); }
+});
+
+// --- Load submissions ---
+async function loadSubmissions(){
+  try{
+    const res = await fetch(API_URL);
+    const data = await res.json();
+    const list = document.getElementById("submissionList");
+    list.innerHTML="";
+    if(data.length===0){ list.textContent="No submissions yet"; return; }
+    data.forEach(sub=>{
+      const div = document.createElement("div");
+      div.className="border-b py-1";
+      div.innerHTML = `<b>${sub.name}</b> (${sub.book} ${sub.chapter}): ${sub.reflection}`;
+      list.appendChild(div);
+    });
+  }catch(e){ console.log(e); }
+}
+</script>
+
+</body>
+</html>
